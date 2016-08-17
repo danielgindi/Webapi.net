@@ -250,3 +250,12 @@ paket-files/
 # JetBrains Rider
 .idea/
 *.sln.iml
+
+# OS junk files
+[Tt]humbs.db
+*.DS_Store
+
+# More build residue
+obj/
+_[Dd]ebug*/
+_[Rr]elease*/
