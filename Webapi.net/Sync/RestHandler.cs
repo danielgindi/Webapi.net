@@ -5,6 +5,7 @@ using System.Web;
 using System.Collections;
 using System.Text.RegularExpressions;
 using System.Net;
+using System.Threading;
 
 namespace Webapi.net
 {
@@ -151,6 +152,10 @@ namespace Webapi.net
                             break; // FINISHED
                         }
                     }
+                }
+                catch (ThreadAbortException)
+                {
+                    // Ignore
                 }
                 catch (System.Exception ex)
                 {

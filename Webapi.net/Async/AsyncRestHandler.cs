@@ -6,6 +6,7 @@ using System.Collections;
 using System.Text.RegularExpressions;
 using System.Net;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace Webapi.net
 {
@@ -143,7 +144,8 @@ namespace Webapi.net
                 else
                 {
                     task.ContinueWith(t => {
-                        if (t.IsFaulted && OnExceptionAction != null)
+                        if (t.IsFaulted && OnExceptionAction != null && 
+                        (t.Exception == null || !(t.Exception.InnerException is ThreadAbortException)))
                         {
                             var exceptionTask = OnExceptionAction(context, t.Exception);
                             BeginTask(exceptionTask, callback, state, context, false);
