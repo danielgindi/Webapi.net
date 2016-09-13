@@ -93,60 +93,71 @@ namespace Webapi.net
                     pathParams.Add(HttpUtility.UrlDecode(match.Groups[i].Captures[0].Value));
                 }
 
-                if (route.TargetAction != null)
+                try
                 {
-                    route.TargetAction(context, path, (string[])pathParams.ToArray(typeof(string)));
-                    Response.End();
-                    break; // FINISHED
+                    if (route.TargetAction != null)
+                    {
+                        route.TargetAction(context, path, (string[])pathParams.ToArray(typeof(string)));
+                        Response.End();
+                        break; // FINISHED
+                    }
+                    else if (route.ITarget != null)
+                    {
+                        route.ITarget.ProcessRequest(context, path, (string[])pathParams.ToArray(typeof(string)));
+                        break; // FINISHED
+                    }
+                    else if (route.LegacyTarget != null)
+                    {
+                        if (httpMethod == @"GET")
+                        {
+                            route.LegacyTarget.Get(Request, Response, (string[])pathParams.ToArray(typeof(string)));
+                            Response.End();
+                            break; // FINISHED
+                        }
+                        else if (httpMethod == @"POST")
+                        {
+                            route.LegacyTarget.Post(Request, Response, (string[])pathParams.ToArray(typeof(string)));
+                            Response.End();
+                            break; // FINISHED
+                        }
+                        else if (httpMethod == @"PUT")
+                        {
+                            route.LegacyTarget.Put(Request, Response, (string[])pathParams.ToArray(typeof(string)));
+                            Response.End();
+                            break; // FINISHED
+                        }
+                        else if (httpMethod == @"DELETE")
+                        {
+                            route.LegacyTarget.Delete(Request, Response, (string[])pathParams.ToArray(typeof(string)));
+                            Response.End();
+                            break; // FINISHED
+                        }
+                        else if (httpMethod == @"HEAD")
+                        {
+                            route.LegacyTarget.Head(Request, Response, (string[])pathParams.ToArray(typeof(string)));
+                            Response.End();
+                            break; // FINISHED
+                        }
+                        else if (httpMethod == @"OPTIONS")
+                        {
+                            route.LegacyTarget.Options(Request, Response, (string[])pathParams.ToArray(typeof(string)));
+                            Response.End();
+                            break; // FINISHED
+                        }
+                        else if (httpMethod == @"PATCH")
+                        {
+                            route.LegacyTarget.Patch(Request, Response, (string[])pathParams.ToArray(typeof(string)));
+                            Response.End();
+                            break; // FINISHED
+                        }
+                    }
                 }
-                else if (route.ITarget != null)
+                catch (System.Exception ex)
                 {
-                    route.ITarget.ProcessRequest(context, path, (string[])pathParams.ToArray(typeof(string)));
-                    break; // FINISHED
-                }
-                else if (route.LegacyTarget != null)
-                {
-                    if (httpMethod == @"GET")
+                    if (OnExceptionAction != null)
                     {
-                        route.LegacyTarget.Get(Request, Response, (string[])pathParams.ToArray(typeof(string)));
+                        OnExceptionAction(context, ex);
                         Response.End();
-                        break; // FINISHED
-                    }
-                    else if (httpMethod == @"POST")
-                    {
-                        route.LegacyTarget.Post(Request, Response, (string[])pathParams.ToArray(typeof(string)));
-                        Response.End();
-                        break; // FINISHED
-                    }
-                    else if (httpMethod == @"PUT")
-                    {
-                        route.LegacyTarget.Put(Request, Response, (string[])pathParams.ToArray(typeof(string)));
-                        Response.End();
-                        break; // FINISHED
-                    }
-                    else if (httpMethod == @"DELETE")
-                    {
-                        route.LegacyTarget.Delete(Request, Response, (string[])pathParams.ToArray(typeof(string)));
-                        Response.End();
-                        break; // FINISHED
-                    }
-                    else if (httpMethod == @"HEAD")
-                    {
-                        route.LegacyTarget.Head(Request, Response, (string[])pathParams.ToArray(typeof(string)));
-                        Response.End();
-                        break; // FINISHED
-                    }
-                    else if (httpMethod == @"OPTIONS")
-                    {
-                        route.LegacyTarget.Options(Request, Response, (string[])pathParams.ToArray(typeof(string)));
-                        Response.End();
-                        break; // FINISHED
-                    }
-                    else if (httpMethod == @"PATCH")
-                    {
-                        route.LegacyTarget.Patch(Request, Response, (string[])pathParams.ToArray(typeof(string)));
-                        Response.End();
-                        break; // FINISHED
                     }
                 }
             }
@@ -166,6 +177,10 @@ namespace Webapi.net
         #endregion
 
         #region Properties
+
+        public delegate void ExceptionAction(HttpContext context, Exception ex);
+
+        public ExceptionAction OnExceptionAction { get; set; }
 
         public Dictionary<string, List<RestHandlerRoute>> Routes
         {

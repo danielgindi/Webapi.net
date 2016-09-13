@@ -103,12 +103,12 @@ namespace Webapi.net
                 if (route.TargetAction != null)
                 {
                     var task = route.TargetAction(context, path, (string[])pathParams.ToArray(typeof(string)));
-                    return BeginTask(task, cb, extraData);
+                    return BeginTask(task, cb, extraData, context, true);
                 }
                 else if (route.ITarget != null)
                 {
                     var task = route.ITarget.ProcessRequest(context, path, (string[])pathParams.ToArray(typeof(string)));
-                    return BeginTask(task, cb, extraData);
+                    return BeginTask(task, cb, extraData, context, true);
                 }
             }
 
@@ -119,7 +119,7 @@ namespace Webapi.net
 
         private static NoTaskAsyncResult s_NoTaskAsyncResult = new NoTaskAsyncResult();
 
-        private static IAsyncResult BeginTask(Task task, AsyncCallback callback, object state)
+        private IAsyncResult BeginTask(Task task, AsyncCallback callback, object state, HttpContext context, bool fallbackToException)
         {
             if (task == null)
             {
@@ -142,7 +142,17 @@ namespace Webapi.net
                 }
                 else
                 {
-                    task.ContinueWith(_ => callback(resultToReturn));
+                    task.ContinueWith(t => {
+                        if (t.IsFaulted && OnExceptionAction != null)
+                        {
+                            var exceptionTask = OnExceptionAction(context, t.Exception);
+                            BeginTask(exceptionTask, callback, state, context, false);
+                        }
+                        else
+                        {
+                            callback(resultToReturn);
+                        }
+                    });
                 }
             }
 
@@ -168,6 +178,10 @@ namespace Webapi.net
         #endregion
 
         #region Properties
+
+        public delegate Task ExceptionAction(HttpContext context, Exception ex);
+
+        public ExceptionAction OnExceptionAction { get; set; }
 
         public Dictionary<string, List<AsyncRestHandlerRoute>> Routes
         {
