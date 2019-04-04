@@ -164,6 +164,10 @@ namespace Webapi.net
                         OnExceptionAction(context, ex);
                         Response.End();
                     }
+                    else
+                    {
+                        throw ex;
+                    }
                 }
             }
 
