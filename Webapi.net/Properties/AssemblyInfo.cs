@@ -9,7 +9,7 @@ using System.Security;
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Daniel Cohen Gindi")]
-[assembly: AssemblyProduct("Imaging.net")]
+[assembly: AssemblyProduct("Webapi.net")]
 [assembly: AssemblyCopyright("Copyright Daniel Cohen Gindi (danielgindi@gmail.com) © 2011")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]

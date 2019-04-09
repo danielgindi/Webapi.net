@@ -62,10 +62,10 @@
     <Compile Include="Async\TaskWrapperAsyncResult.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Sync\IRestHandlerSingleTarget.cs" />
-    <Compile Include="Sync\IRestHandlerTarget.cs" />
     <Compile Include="Sync\RestHandler.cs" />
     <Compile Include="Sync\RestHandlerRoute.cs" />
-    <Compile Include="Utils\RouteHelper.cs" />
+    <Compile Include="Utils\PathToRegex.cs" />
+    <Compile Include="Utils\ParamsCollection.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="StrongKey.snk" />

@@ -11,22 +11,27 @@ using System.Threading;
 namespace Webapi.net
 {
     /// <summary>
-    /// Supports Backbone-style with some additional sugar.
-    /// 
-    /// ::name_param (exact param name)
-    /// :name_param (any character except /)
-    /// #named_digits_param (digits)
-    /// *wildcard_including_backslashes
-    /// (optional_param)
+    /// Supports express-style routes.
+    /// https://github.com/pillarjs/path-to-regexp
+    /// Only exception to the defaults of express, is that here the `end` option is `true` by default (matching to end of path)
     /// 
     /// Examples:
     /// 
-    /// help => help
-    /// search/:query => search/kiwis
-    /// search/:query/p:page => search/kiwis/p7 and search/kiwis/plast
-    /// search/:query/p#page => search/kiwis/p7
-    /// file/*path => file/nested/folder/file.txt
-    /// docs/:section(/:subsection) => docs/faq and docs/faq/installing
+    /// /foo/:bar            => "/foo/test"                 : bar => "test"
+    /// /:foo/:bar           => "/test/route"               : foo => "test", bar => "route"
+    /// /:foo/:bar?          => "/test/route", "/test"      : foo => "test", bar => "route" || n/a
+    /// /:foo*               => "/", "/bar", "/bar/baz"     : foo => n/a, foo => "bar", foo => "bar/baz"
+    /// /:foo+               => "/bar", "/bar/baz"          : foo => "bar", foo => "bar/baz"
+    /// /:foo/(.*)           => "/test/route"               : foo => "test", 0 => "route"
+    /// /icon-:foo(\\d+).png => "/icon-12345.png"           : foo => "12345"
+    /// /(user|u)            => "/user", "/u"               : 0 => "user" || "u"
+    /// 
+    /// /help => help
+    /// /search/:query => search/kiwis
+    /// /search/:query/p:page => search/kiwis/p7 and search/kiwis/plast
+    /// /search/:query/p:page(\\d+) => search/kiwis/p7
+    /// /file/:path(.*) => file/nested/folder/file.txt
+    /// /docs/:section/:subsection? => docs/faq and docs/faq/installing
     /// </summary>
     public abstract class AsyncRestHandler : IHttpAsyncHandler
     {
@@ -73,9 +78,9 @@ namespace Webapi.net
             }
 
             string path = Request.Url.AbsolutePath;
-            if (_PathPrefix != null && path.StartsWith(_PathPrefix))
+            if (_PathPrefix != null && !path.StartsWith(_PathPrefix))
             {
-                path = path.Remove(0, _PathPrefix.Length);
+                path = _PathPrefix + path;
             }
 
             // Strip query string
@@ -85,30 +90,37 @@ namespace Webapi.net
                 path = path.Remove(qIndex);
             }
 
-            Match match;
-            ArrayList pathParams;
-            int i, len;
-
             foreach (AsyncRestHandlerRoute route in routes)
             {
-                match = route.Pattern.Match(path);
+                var match = route.Pattern.Match(path);
                 if (!match.Success) continue;
 
-                pathParams = new ArrayList();
-                for (i = 1, len = match.Groups.Count; i < len; i++)
-                {
-                    if (match.Groups[i].Captures.Count == 0) continue;
-                    pathParams.Add(HttpUtility.UrlDecode(match.Groups[i].Captures[0].Value));
-                }
+                var pathParams = new ParamsCollection();
 
+                for (int i = 1; i < match.Groups.Count; i++)
+                {
+                    var key = route.PatternKeys[i - 1];
+                    var val = HttpUtility.UrlDecode(match.Groups[i].Value);
+                    
+                    if (key.Name != null) 
+                    {
+                        pathParams.Add(key.Name, val);
+                    }
+
+                    if (key.Index != null)
+                    {
+                        pathParams.Set(key.Index.Value, val);
+                    }
+                }
+                
                 if (route.TargetAction != null)
                 {
-                    var task = route.TargetAction(context, path, (string[])pathParams.ToArray(typeof(string)));
+                    var task = route.TargetAction(context, path, pathParams);
                     return BeginTask(task, cb, extraData, context, true);
                 }
                 else if (route.ITarget != null)
                 {
-                    var task = route.ITarget.ProcessRequest(context, path, (string[])pathParams.ToArray(typeof(string)));
+                    var task = route.ITarget.ProcessRequest(context, path, pathParams);
                     return BeginTask(task, cb, extraData, context, true);
                 }
             }
@@ -175,8 +187,8 @@ namespace Webapi.net
 
         private HttpStatusCode _DefaultStatusCode = HttpStatusCode.NotImplemented;
 
-        private string _PathPrefix = @"/"
-;
+        private string _PathPrefix = @"/";
+
         #endregion
 
         #region Properties
@@ -210,6 +222,15 @@ namespace Webapi.net
             }
         }
 
+        public static PathToRegexUtil.PathToRegexOptions DefaultRouteOptions = new PathToRegexUtil.PathToRegexOptions
+        {
+            Start = true,
+            End = true,
+            Delimiter = '/',
+            Sensitive = false,
+            Strict = false,
+        };
+
         /// <summary>
         /// Should disconnected clients be discarded automatically?
         /// 
@@ -238,144 +259,144 @@ namespace Webapi.net
             routes.Add(Route);
         }
 
-        public void Get(string route, AsyncRestHandlerRoute.Action action)
+        public void Get(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"GET", new AsyncRestHandlerRoute(route, action));
+            AddRoute(@"GET", new AsyncRestHandlerRoute(route, action, options ?? DefaultRouteOptions));
         }
 
-        public void Get(Regex routePattern, AsyncRestHandlerRoute.Action action)
+        public void Get(Regex routePattern, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"GET", new AsyncRestHandlerRoute(routePattern, action));
+            AddRoute(@"GET", new AsyncRestHandlerRoute(routePattern, action, options ?? DefaultRouteOptions));
         }
 
-        public void Get(string route, IAsyncRestHandlerTarget target)
+        public void Get(string route, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"GET", new AsyncRestHandlerRoute(route, target));
+            AddRoute(@"GET", new AsyncRestHandlerRoute(route, target, options ?? DefaultRouteOptions));
         }
 
-        public void Get(Regex routePattern, IAsyncRestHandlerTarget target)
+        public void Get(Regex routePattern, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"GET", new AsyncRestHandlerRoute(routePattern, target));
+            AddRoute(@"GET", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Post(string route, AsyncRestHandlerRoute.Action action)
+        public void Post(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"POST", new AsyncRestHandlerRoute(route, action));
+            AddRoute(@"POST", new AsyncRestHandlerRoute(route, action, options ?? DefaultRouteOptions));
         }
 
-        public void Post(Regex routePattern, AsyncRestHandlerRoute.Action action)
+        public void Post(Regex routePattern, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"POST", new AsyncRestHandlerRoute(routePattern, action));
+            AddRoute(@"POST", new AsyncRestHandlerRoute(routePattern, action, options ?? DefaultRouteOptions));
         }
 
-        public void Post(string route, IAsyncRestHandlerTarget target)
+        public void Post(string route, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"POST", new AsyncRestHandlerRoute(route, target));
+            AddRoute(@"POST", new AsyncRestHandlerRoute(route, target, options ?? DefaultRouteOptions));
         }
 
-        public void Post(Regex routePattern, IAsyncRestHandlerTarget target)
+        public void Post(Regex routePattern, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"POST", new AsyncRestHandlerRoute(routePattern, target));
+            AddRoute(@"POST", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Put(string route, AsyncRestHandlerRoute.Action action)
+        public void Put(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"PUT", new AsyncRestHandlerRoute(route, action));
+            AddRoute(@"PUT", new AsyncRestHandlerRoute(route, action, options ?? DefaultRouteOptions));
         }
 
-        public void Put(Regex routePattern, AsyncRestHandlerRoute.Action action)
+        public void Put(Regex routePattern, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"PUT", new AsyncRestHandlerRoute(routePattern, action));
+            AddRoute(@"PUT", new AsyncRestHandlerRoute(routePattern, action, options ?? DefaultRouteOptions));
         }
 
-        public void Put(string route, IAsyncRestHandlerTarget target)
+        public void Put(string route, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"PUT", new AsyncRestHandlerRoute(route, target));
+            AddRoute(@"PUT", new AsyncRestHandlerRoute(route, target, options ?? DefaultRouteOptions));
         }
 
-        public void Put(Regex routePattern, IAsyncRestHandlerTarget target)
+        public void Put(Regex routePattern, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"PUT", new AsyncRestHandlerRoute(routePattern, target));
+            AddRoute(@"PUT", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Delete(string route, AsyncRestHandlerRoute.Action action)
+        public void Delete(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"DELETE", new AsyncRestHandlerRoute(route, action));
+            AddRoute(@"DELETE", new AsyncRestHandlerRoute(route, action, options ?? DefaultRouteOptions));
         }
 
-        public void Delete(Regex routePattern, AsyncRestHandlerRoute.Action action)
+        public void Delete(Regex routePattern, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"DELETE", new AsyncRestHandlerRoute(routePattern, action));
+            AddRoute(@"DELETE", new AsyncRestHandlerRoute(routePattern, action, options ?? DefaultRouteOptions));
         }
 
-        public void Delete(string route, IAsyncRestHandlerTarget target)
+        public void Delete(string route, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"DELETE", new AsyncRestHandlerRoute(route, target));
+            AddRoute(@"DELETE", new AsyncRestHandlerRoute(route, target, options ?? DefaultRouteOptions));
         }
 
-        public void Delete(Regex routePattern, IAsyncRestHandlerTarget target)
+        public void Delete(Regex routePattern, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"DELETE", new AsyncRestHandlerRoute(routePattern, target));
+            AddRoute(@"DELETE", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Head(string route, AsyncRestHandlerRoute.Action action)
+        public void Head(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"HEAD", new AsyncRestHandlerRoute(route, action));
+            AddRoute(@"HEAD", new AsyncRestHandlerRoute(route, action, options ?? DefaultRouteOptions));
         }
 
-        public void Head(Regex routePattern, AsyncRestHandlerRoute.Action action)
+        public void Head(Regex routePattern, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"HEAD", new AsyncRestHandlerRoute(routePattern, action));
+            AddRoute(@"HEAD", new AsyncRestHandlerRoute(routePattern, action, options ?? DefaultRouteOptions));
         }
 
-        public void Head(string route, IAsyncRestHandlerTarget target)
+        public void Head(string route, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"HEAD", new AsyncRestHandlerRoute(route, target));
+            AddRoute(@"HEAD", new AsyncRestHandlerRoute(route, target, options ?? DefaultRouteOptions));
         }
 
-        public void Head(Regex routePattern, IAsyncRestHandlerTarget target)
+        public void Head(Regex routePattern, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"HEAD", new AsyncRestHandlerRoute(routePattern, target));
+            AddRoute(@"HEAD", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Options(string route, AsyncRestHandlerRoute.Action action)
+        public void Options(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(route, action));
+            AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(route, action, options ?? DefaultRouteOptions));
         }
 
-        public void Options(Regex routePattern, AsyncRestHandlerRoute.Action action)
+        public void Options(Regex routePattern, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(routePattern, action));
+            AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(routePattern, action, options ?? DefaultRouteOptions));
         }
 
-        public void Options(string route, IAsyncRestHandlerTarget target)
+        public void Options(string route, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(route, target));
+            AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(route, target, options ?? DefaultRouteOptions));
         }
 
-        public void Options(Regex routePattern, IAsyncRestHandlerTarget target)
+        public void Options(Regex routePattern, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(routePattern, target));
+            AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Patch(string route, AsyncRestHandlerRoute.Action action)
+        public void Patch(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"PATCH", new AsyncRestHandlerRoute(route, action));
+            AddRoute(@"PATCH", new AsyncRestHandlerRoute(route, action, options ?? DefaultRouteOptions));
         }
 
-        public void Patch(Regex routePattern, AsyncRestHandlerRoute.Action action)
+        public void Patch(Regex routePattern, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"PATCH", new AsyncRestHandlerRoute(routePattern, action));
+            AddRoute(@"PATCH", new AsyncRestHandlerRoute(routePattern, action, options ?? DefaultRouteOptions));
         }
 
-        public void Patch(string route, IAsyncRestHandlerTarget target)
+        public void Patch(string route, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"PATCH", new AsyncRestHandlerRoute(route, target));
+            AddRoute(@"PATCH", new AsyncRestHandlerRoute(route, target, options ?? DefaultRouteOptions));
         }
 
-        public void Patch(Regex routePattern, IAsyncRestHandlerTarget target)
+        public void Patch(Regex routePattern, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            AddRoute(@"PATCH", new AsyncRestHandlerRoute(routePattern, target));
+            AddRoute(@"PATCH", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
         #endregion

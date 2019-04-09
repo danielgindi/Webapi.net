@@ -1,93 +1,76 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Collections;
+﻿using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Web;
-using System.Threading.Tasks;
 
 namespace Webapi.net
 {
     public struct RestHandlerRoute
     {
+        private static PathToRegexUtil.PathToRegexOptions DEFAULT_PATH_TO_REGEX_OPTIONS = new PathToRegexUtil.PathToRegexOptions
+        {
+            Start = true,
+            End = true,
+            Delimiter = '/',
+            Sensitive = false,
+            Strict = false,
+        };
+
         /// <param name="context"></param>
         /// <param name="path">The url path part, excluding the path prefix and the query string</param>
-        /// <param name="pathParams">Parameters detected in the path, by their specified order</param>
-        public delegate void Action(HttpContext context, string path, params string[] pathParams);
+        /// <param name="pathParams">Parameters detected in the path, either by indexes or keys</param>
+        public delegate void Action(HttpContext context, string path, ParamsCollection pathParams);
 
-        /// <param name="context"></param>
-        /// <param name="path">The url path part, excluding the path prefix and the query string</param>
-        /// <param name="pathParams">Parameters detected in the path, by their specified order</param>
-        /// <returns>A task which represents an asynchronous operation to await or null if a synchronous operation already completed.</returns>
-        public delegate Task AsyncAction(HttpContext context, string path, params string[] pathParams);
-
-        public RestHandlerRoute(string route, Action target)
+        public RestHandlerRoute(string route, Action target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            this.Pattern = RouteHelper.RouteToRegex(route);
+            this.PatternKeys = new List<PathToRegexUtil.Token>();
+            this.Pattern = PathToRegexUtil.PathToRegex(
+                route.StartsWith("/") ? route : ("/" + route), 
+                ref this.PatternKeys, 
+                options ?? DEFAULT_PATH_TO_REGEX_OPTIONS);
+
             this.TargetAction = target;
             this.ITarget = null;
-
-#pragma warning disable CS0612 // Type or member is obsolete
-            this.LegacyTarget = null;
-#pragma warning restore CS0612 // Type or member is obsolete
         }
 
-        public RestHandlerRoute(Regex pattern, Action target)
+        public RestHandlerRoute(Regex pattern, Action target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            this.Pattern = pattern;
+            this.PatternKeys = new List<PathToRegexUtil.Token>();
+            this.Pattern = PathToRegexUtil.PathToRegex(
+                pattern,
+                ref this.PatternKeys,
+                options ?? DEFAULT_PATH_TO_REGEX_OPTIONS);
+
             this.TargetAction = target;
             this.ITarget = null;
-
-#pragma warning disable CS0612 // Type or member is obsolete
-            this.LegacyTarget = null;
-#pragma warning restore CS0612 // Type or member is obsolete
         }
 
-        public RestHandlerRoute(string route, IRestHandlerSingleTarget target)
+        public RestHandlerRoute(string route, IRestHandlerSingleTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            this.Pattern = RouteHelper.RouteToRegex(route);
+            this.PatternKeys = new List<PathToRegexUtil.Token>();
+            this.Pattern = PathToRegexUtil.PathToRegex(
+                route.StartsWith("/") ? route : ("/" + route), 
+                ref this.PatternKeys,
+                options ?? DEFAULT_PATH_TO_REGEX_OPTIONS);
+
             this.TargetAction = null;
             this.ITarget = target;
-
-#pragma warning disable CS0612 // Type or member is obsolete
-            this.LegacyTarget = null;
-#pragma warning restore CS0612 // Type or member is obsolete
         }
 
-        public RestHandlerRoute(Regex pattern, IRestHandlerSingleTarget target)
+        public RestHandlerRoute(Regex pattern, IRestHandlerSingleTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
-            this.Pattern = pattern;
+            this.PatternKeys = new List<PathToRegexUtil.Token>();
+            this.Pattern = PathToRegexUtil.PathToRegex(
+                pattern,
+                ref this.PatternKeys,
+                options ?? DEFAULT_PATH_TO_REGEX_OPTIONS);
+
             this.TargetAction = null;
             this.ITarget = target;
-
-#pragma warning disable CS0612 // Type or member is obsolete
-            this.LegacyTarget = null;
-#pragma warning restore CS0612 // Type or member is obsolete
         }
-
-        [Obsolete]
-        public RestHandlerRoute(string route, IRestHandlerTarget target)
-        {
-            this.Pattern = RouteHelper.RouteToRegex(route);
-            this.TargetAction = null;
-            this.LegacyTarget = target;
-            this.ITarget = null;
-        }
-
-        [Obsolete]
-        public RestHandlerRoute(Regex pattern, IRestHandlerTarget target)
-        {
-            this.Pattern = pattern;
-            this.TargetAction = null;
-            this.LegacyTarget = target;
-            this.ITarget = null;
-        }
-        
+                
         public Regex Pattern;
+        public List<PathToRegexUtil.Token> PatternKeys;
         public Action TargetAction;
         public IRestHandlerSingleTarget ITarget;
-
-        [Obsolete]
-        public IRestHandlerTarget LegacyTarget;
     }
 }
