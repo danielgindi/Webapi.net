@@ -13,7 +13,8 @@ namespace Webapi.net
     /// <summary>
     /// Supports express-style routes.
     /// https://github.com/pillarjs/path-to-regexp
-    /// Only exception to the defaults of express, is that here the `end` option is `true` by default (matching to end of path)
+    /// Only exception to the defaults of express, is that here the `end=true` by default (matching to end of path)
+    /// (Except for adding subrouters, where the default for the parent is `end=false`
     /// 
     /// Examples:
     /// 
@@ -63,20 +64,6 @@ namespace Webapi.net
 
             Response.ContentEncoding = Encoding.UTF8;
 
-            string httpMethod = Request.HttpMethod;
-
-            IEnumerable<AsyncRestHandlerRoute> routes;
-            if (this._Routes.ContainsKey(httpMethod))
-            {
-                routes = this._Routes[httpMethod];
-            }
-            else
-            {
-                Response.StatusCode = (int)_DefaultStatusCode;
-                Response.End();
-                return null;
-            }
-
             string path = Request.Url.AbsolutePath;
             if (_PathPrefix != null && !path.StartsWith(_PathPrefix))
             {
@@ -90,19 +77,36 @@ namespace Webapi.net
                 path = path.Remove(qIndex);
             }
 
-            foreach (AsyncRestHandlerRoute route in routes)
+            var result = HandleRoute(context, Request.HttpMethod, path, null, cb, extraData);
+            if (result != null)
+                return result;
+
+            Response.StatusCode = (int)_DefaultStatusCode;
+            Response.End();
+            return null;
+        }
+
+        internal IAsyncResult HandleRoute(
+            HttpContext context, string httpMethod, string path, ParamsCollection pathParams,
+            AsyncCallback cb, object extraData)
+        {
+            if (!this.Routes.TryGetValue(httpMethod, out var routes))
+                return null;
+
+            foreach (var route in routes)
             {
                 var match = route.Pattern.Match(path);
                 if (!match.Success) continue;
 
-                var pathParams = new ParamsCollection();
+                if (pathParams == null)
+                    pathParams = new ParamsCollection();
 
                 for (int i = 1; i < match.Groups.Count; i++)
                 {
                     var key = route.PatternKeys[i - 1];
                     var val = HttpUtility.UrlDecode(match.Groups[i].Value);
-                    
-                    if (key.Name != null) 
+
+                    if (key.Name != null)
                     {
                         pathParams.Add(key.Name, val);
                     }
@@ -112,7 +116,7 @@ namespace Webapi.net
                         pathParams.Set(key.Index.Value, val);
                     }
                 }
-                
+
                 if (route.TargetAction != null)
                 {
                     var task = route.TargetAction(context, path, pathParams);
@@ -123,10 +127,18 @@ namespace Webapi.net
                     var task = route.ITarget.ProcessRequest(context, path, pathParams);
                     return BeginTask(task, cb, extraData, context, true);
                 }
+                else if (route.Handler != null)
+                {
+                    var subPath = path.Remove(0, match.Value.Length);
+                    if (!subPath.StartsWith("/"))
+                        subPath = "/" + subPath;
+
+                    var result = route.Handler.HandleRoute(context, httpMethod, subPath, pathParams, cb, extraData);
+                    if (result != null)
+                        return result;
+                }
             }
 
-            Response.StatusCode = (int)_DefaultStatusCode;
-            Response.End();
             return null;
         }
 
@@ -231,6 +243,15 @@ namespace Webapi.net
             Strict = false,
         };
 
+        public static PathToRegexUtil.PathToRegexOptions DefaultHandlerRouteOptions = new PathToRegexUtil.PathToRegexOptions
+        {
+            Start = true,
+            End = false,
+            Delimiter = '/',
+            Sensitive = false,
+            Strict = false,
+        };
+
         /// <summary>
         /// Should disconnected clients be discarded automatically?
         /// 
@@ -279,6 +300,16 @@ namespace Webapi.net
             AddRoute(@"GET", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
+        public void Get(string route, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"GET", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Get(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"GET", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
         public void Post(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"POST", new AsyncRestHandlerRoute(route, action, options ?? DefaultRouteOptions));
@@ -297,6 +328,16 @@ namespace Webapi.net
         public void Post(Regex routePattern, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"POST", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
+        }
+
+        public void Post(string route, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"POST", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Post(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"POST", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
 
         public void Put(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
@@ -319,6 +360,16 @@ namespace Webapi.net
             AddRoute(@"PUT", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
+        public void Put(string route, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"PUT", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Put(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"PUT", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
         public void Delete(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"DELETE", new AsyncRestHandlerRoute(route, action, options ?? DefaultRouteOptions));
@@ -337,6 +388,16 @@ namespace Webapi.net
         public void Delete(Regex routePattern, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"DELETE", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
+        }
+
+        public void Delete(string route, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"DELETE", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Delete(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"DELETE", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
 
         public void Head(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
@@ -359,6 +420,16 @@ namespace Webapi.net
             AddRoute(@"HEAD", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
+        public void Head(string route, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"HEAD", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Head(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"HEAD", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
         public void Options(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(route, action, options ?? DefaultRouteOptions));
@@ -379,6 +450,16 @@ namespace Webapi.net
             AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
+        public void Options(string route, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Options(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
         public void Patch(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"PATCH", new AsyncRestHandlerRoute(route, action, options ?? DefaultRouteOptions));
@@ -397,6 +478,16 @@ namespace Webapi.net
         public void Patch(Regex routePattern, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"PATCH", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
+        }
+
+        public void Patch(string route, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"PATCH", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Patch(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"PATCH", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
 
         #endregion

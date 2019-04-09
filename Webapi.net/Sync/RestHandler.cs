@@ -12,7 +12,8 @@ namespace Webapi.net
     /// <summary>
     /// Supports express-style routes.
     /// https://github.com/pillarjs/path-to-regexp
-    /// Only exception to the defaults of express, is that here the `end` option is `true` by default (matching to end of path)
+    /// Only exception to the defaults of express, is that here the `end=true` by default (matching to end of path)
+    /// (Except for adding subrouters, where the default for the parent is `end=false`
     /// 
     /// Examples:
     /// 
@@ -57,20 +58,6 @@ namespace Webapi.net
 
             Response.ContentEncoding = Encoding.UTF8;
 
-            string httpMethod = Request.HttpMethod;
-
-            IEnumerable<RestHandlerRoute> routes;
-            if (this.Routes.ContainsKey(httpMethod))
-            {
-                routes = this.Routes[httpMethod];
-            }
-            else
-            {
-                Response.StatusCode = (int)DefaultStatusCode;
-                Response.End();
-                return;
-            }
-
             string path = Request.Url.AbsolutePath;
             if (_PathPrefix != null && !path.StartsWith(_PathPrefix))
             {
@@ -84,19 +71,33 @@ namespace Webapi.net
                 path = path.Remove(qIndex);
             }
 
-            foreach (RestHandlerRoute route in routes)
+            var result = HandleRoute(context, Request.HttpMethod, path, null);
+            if (result)
+                return;
+
+            Response.StatusCode = (int)DefaultStatusCode;
+            Response.End();
+        }
+
+        internal bool HandleRoute(HttpContext context, string httpMethod, string path, ParamsCollection pathParams)
+        {
+            if (!this.Routes.TryGetValue(httpMethod, out var routes))
+                return false;
+
+            foreach (var route in routes)
             {
                 var match = route.Pattern.Match(path);
                 if (!match.Success) continue;
 
-                var pathParams = new ParamsCollection();
+                if (pathParams == null)
+                    pathParams = new ParamsCollection();
 
                 for (int i = 1; i < match.Groups.Count; i++)
                 {
                     var key = route.PatternKeys[i - 1];
                     var val = HttpUtility.UrlDecode(match.Groups[i].Value);
-                    
-                    if (key.Name != null) 
+
+                    if (key.Name != null)
                     {
                         pathParams.Add(key.Name, val);
                     }
@@ -106,31 +107,40 @@ namespace Webapi.net
                         pathParams.Set(key.Index.Value, val);
                     }
                 }
-               
+
                 try
                 {
                     if (route.TargetAction != null)
                     {
                         route.TargetAction(context, path, pathParams);
-                        Response.End();
-                        break; // FINISHED
+                        return true;
                     }
                     else if (route.ITarget != null)
                     {
                         route.ITarget.ProcessRequest(context, path, pathParams);
-                        break; // FINISHED
+                        return true;
+                    }
+                    else if (route.Handler != null)
+                    {
+                        var subPath = path.Remove(0, match.Value.Length);
+                        if (!subPath.StartsWith("/"))
+                            subPath = "/" + subPath;
+
+                        if (route.Handler.HandleRoute(context, httpMethod, subPath, pathParams))
+                            return true;
                     }
                 }
                 catch (ThreadAbortException)
                 {
                     // Ignore
+                    return true;
                 }
                 catch (System.Exception ex)
                 {
                     if (OnExceptionAction != null)
                     {
                         OnExceptionAction(context, ex);
-                        Response.End();
+                        return true;
                     }
                     else
                     {
@@ -139,8 +149,7 @@ namespace Webapi.net
                 }
             }
 
-            Response.StatusCode = (int)DefaultStatusCode;
-            Response.End();
+            return false;
         }
 
         #region Variables
@@ -176,6 +185,15 @@ namespace Webapi.net
         {
             Start = true,
             End = true,
+            Delimiter = '/',
+            Sensitive = false,
+            Strict = false,
+        };
+
+        public static PathToRegexUtil.PathToRegexOptions DefaultHandlerRouteOptions = new PathToRegexUtil.PathToRegexOptions
+        {
+            Start = true,
+            End = false,
             Delimiter = '/',
             Sensitive = false,
             Strict = false,
@@ -229,6 +247,16 @@ namespace Webapi.net
             AddRoute(@"GET", new RestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
+        public void Get(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"GET", new RestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Get(Regex routePattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"GET", new RestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
         public void Post(string route, RestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"POST", new RestHandlerRoute(route, action, options ?? DefaultRouteOptions));
@@ -247,6 +275,16 @@ namespace Webapi.net
         public void Post(Regex routePattern, IRestHandlerSingleTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"POST", new RestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
+        }
+
+        public void Post(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"POST", new RestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Post(Regex routePattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"POST", new RestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
 
         public void Put(string route, RestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
@@ -269,6 +307,16 @@ namespace Webapi.net
             AddRoute(@"PUT", new RestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
+        public void Put(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"PUT", new RestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Put(Regex routePattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"PUT", new RestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
         public void Delete(string route, RestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"DELETE", new RestHandlerRoute(route, action, options ?? DefaultRouteOptions));
@@ -287,6 +335,16 @@ namespace Webapi.net
         public void Delete(Regex routePattern, IRestHandlerSingleTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"DELETE", new RestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
+        }
+
+        public void Delete(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"DELETE", new RestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Delete(Regex routePattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"DELETE", new RestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
 
         public void Head(string route, RestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
@@ -309,6 +367,16 @@ namespace Webapi.net
             AddRoute(@"HEAD", new RestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
+        public void Head(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"HEAD", new RestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Head(Regex routePattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"HEAD", new RestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
         public void Options(string route, RestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"OPTIONS", new RestHandlerRoute(route, action, options ?? DefaultRouteOptions));
@@ -329,6 +397,16 @@ namespace Webapi.net
             AddRoute(@"OPTIONS", new RestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
+        public void Options(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"OPTIONS", new RestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Options(Regex routePattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"OPTIONS", new RestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
         public void Patch(string route, RestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"PATCH", new RestHandlerRoute(route, action, options ?? DefaultRouteOptions));
@@ -347,6 +425,16 @@ namespace Webapi.net
         public void Patch(Regex routePattern, IRestHandlerSingleTarget target, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"PATCH", new RestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
+        }
+
+        public void Patch(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"PATCH", new RestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Patch(Regex routePattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"PATCH", new RestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
 
         #endregion
