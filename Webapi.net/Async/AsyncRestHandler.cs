@@ -65,9 +65,14 @@ namespace Webapi.net
             Response.ContentEncoding = Encoding.UTF8;
 
             string path = Request.Url.AbsolutePath;
-            if (_PathPrefix != null && !path.StartsWith(_PathPrefix))
+            if (_PathPrefix != null && path.StartsWith(_PathPrefix))
             {
-                path = _PathPrefix + path;
+                path = path.Remove(0, _PathPrefix.Length);
+            }
+
+            if (path.Length > 0 && path[0] != '/')
+            {
+                path = "/" + path;
             }
 
             // Strip query string
@@ -199,7 +204,7 @@ namespace Webapi.net
 
         private HttpStatusCode _DefaultStatusCode = HttpStatusCode.NotImplemented;
 
-        private string _PathPrefix = @"/";
+        private string _PathPrefix = null;
 
         #endregion
 
@@ -224,14 +229,7 @@ namespace Webapi.net
         public string PathPrefix
         {
             get { return _PathPrefix; }
-            set
-            {
-                if (value == null || value.Length == 0)
-                {
-                    value = @"/";
-                }
-                _PathPrefix = value;
-            }
+            set { _PathPrefix = value; }
         }
 
         public static PathToRegexUtil.PathToRegexOptions DefaultRouteOptions = new PathToRegexUtil.PathToRegexOptions
