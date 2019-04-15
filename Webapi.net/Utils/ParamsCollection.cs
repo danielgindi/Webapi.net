@@ -124,10 +124,10 @@ namespace Webapi.net
             if (_KeyedValues != null && _KeyedValues.TryGetValue(key, out var list))
             {
                 var count = list.Count;
-                return count == 0 ? "" : count == 1 ? list[0] : string.Join(", ", list);
+                return count == 0 ? null : count == 1 ? list[0] : string.Join(", ", list);
             }
 
-            return "";
+            return null;
         }
 
         public virtual string[] GetValues(string key)
