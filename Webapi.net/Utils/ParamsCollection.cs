@@ -182,8 +182,8 @@ namespace Webapi.net
                 {
                     if (this._KeyedValues == null)
                         _CachedAllKeys = EMPTY_STRING_ARRAY;
-
-                    _CachedAllKeys = this._KeyedValues.Keys.ToArray();
+                    else
+                        _CachedAllKeys = this._KeyedValues.Keys.ToArray();
                 }
 
                 return _CachedAllKeys;
