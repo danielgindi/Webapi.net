@@ -108,8 +108,12 @@ namespace Webapi.net
 
                 for (int i = 1; i < match.Groups.Count; i++)
                 {
+                    var g = match.Groups[i];
+                    if (!g.Success)
+                        continue;
+
                     var key = route.PatternKeys[i - 1];
-                    var val = HttpUtility.UrlDecode(match.Groups[i].Value);
+                    var val = HttpUtility.UrlDecode(g.Value);
 
                     if (key.Name != null)
                     {
