@@ -304,7 +304,7 @@ namespace Webapi.net
                 if (!isEndDelimited) route += "(?=" + EscapeString("" + options.Delimiter) + "|" + endsWith + ")";
             }
 
-            return new Regex(route, RegexOptions.ECMAScript | (options.Sensitive ? RegexOptions.IgnoreCase : RegexOptions.None));
+            return new Regex(route, RegexOptions.ECMAScript | (options.Sensitive ? RegexOptions.None : RegexOptions.IgnoreCase));
         }
 
         /// <summary>
@@ -338,7 +338,7 @@ namespace Webapi.net
             }
 
             return new Regex("(?:" + string.Join("|", parts) + ")",
-                RegexOptions.ECMAScript | (options.Sensitive ? RegexOptions.IgnoreCase : RegexOptions.None));
+                RegexOptions.ECMAScript | (options.Sensitive ? RegexOptions.None : RegexOptions.IgnoreCase));
         }
 
         /// <summary>

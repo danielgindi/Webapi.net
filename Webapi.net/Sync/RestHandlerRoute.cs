@@ -85,7 +85,7 @@ namespace Webapi.net
         {
             this.PatternKeys = new List<PathToRegexUtil.Token>();
             this.Pattern = PathToRegexUtil.PathToRegex(
-                route,
+                route.StartsWith("/") ? route : ("/" + route),
                 ref this.PatternKeys,
                 options ?? DEFAULT_HANDLER_PATH_TO_REGEX_OPTIONS);
 
