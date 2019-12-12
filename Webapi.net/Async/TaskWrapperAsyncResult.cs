@@ -44,14 +44,6 @@ namespace Webapi.net
             private set;
         }
 
-        WaitHandle IAsyncResult.AsyncWaitHandle
-        {
-            get
-            {
-                throw new NotImplementedException();
-            }
-        }
-
         internal void ForceCompletedSynchronously()
         {
             _forceCompletedSynchronously = true;

@@ -128,13 +128,37 @@ namespace Webapi.net
 
                 if (route.TargetAction != null)
                 {
-                    var task = route.TargetAction(context, path, pathParams);
-                    return BeginTask(task, cb, extraData, context, true);
+                    Task task;
+                    bool fallbackToExHandler = true;
+
+                    try
+                    {
+                        task = route.TargetAction(context, path, pathParams);
+                    }
+                    catch (Exception ex) when (!(ex is OperationCanceledException) && OnExceptionAction != null)
+                    {
+                        task = OnExceptionAction(context, ex);
+                        fallbackToExHandler = false;
+                    }
+
+                    return BeginTask(task, cb, extraData, context, fallbackToExHandler);
                 }
                 else if (route.ITarget != null)
                 {
-                    var task = route.ITarget.ProcessRequest(context, path, pathParams);
-                    return BeginTask(task, cb, extraData, context, true);
+                    Task task;
+                    bool fallbackToExHandler = true;
+
+                    try
+                    {
+                        task = route.ITarget.ProcessRequest(context, path, pathParams);
+                    }
+                    catch (Exception ex) when (!(ex is OperationCanceledException) && OnExceptionAction != null)
+                    {
+                        task = OnExceptionAction(context, ex);
+                        fallbackToExHandler = false;
+                    }
+
+                    return BeginTask(task, cb, extraData, context, fallbackToExHandler);
                 }
                 else if (route.Handler != null)
                 {
@@ -153,45 +177,59 @@ namespace Webapi.net
 
         private static NoTaskAsyncResult s_NoTaskAsyncResult = new NoTaskAsyncResult();
 
-        private IAsyncResult BeginTask(Task task, AsyncCallback callback, object state, HttpContext context, bool fallbackToException)
+        private IAsyncResult BeginTask(Task task, AsyncCallback callback, object state, HttpContext context, bool fallbackToExHandler)
         {
             if (task == null)
             {
                 return s_NoTaskAsyncResult;
             }
 
-            TaskWrapperAsyncResult resultToReturn = new TaskWrapperAsyncResult(task, state);
-            
-            bool actuallyCompletedSynchronously = task.IsCompleted;
-            if (actuallyCompletedSynchronously)
+            if (task.IsCompleted)
             {
-                resultToReturn.ForceCompletedSynchronously();
-            }
-
-            if (callback != null)
-            {
-                if (actuallyCompletedSynchronously)
+                if (task.IsFaulted &&
+                    fallbackToExHandler &&
+                    OnExceptionAction != null &&
+                    !(task.Exception.InnerException is OperationCanceledException))
                 {
-                    callback(resultToReturn);
+                    var exceptionTask = OnExceptionAction(context, task.Exception);
+                    return BeginTask(exceptionTask, callback, state, context, false);
                 }
                 else
                 {
-                    task.ContinueWith(t => {
-                        if (t.IsFaulted && OnExceptionAction != null && 
-                        (t.Exception == null || !(t.Exception.InnerException is ThreadAbortException)))
-                        {
-                            var exceptionTask = OnExceptionAction(context, t.Exception);
-                            BeginTask(exceptionTask, callback, state, context, false);
-                        }
-                        else
-                        {
-                            callback(resultToReturn);
-                        }
-                    });
+                    var resultToReturn = new TaskWrapperAsyncResult(task, state);
+                    resultToReturn.ForceCompletedSynchronously();
+                    callback?.Invoke(resultToReturn);
+                    return resultToReturn;
                 }
             }
+            else
+            {
+                var resultToReturn = new TaskWrapperAsyncResult(task, state);
 
-            return resultToReturn;
+                task.ContinueWith(t => {
+                    if (t.IsFaulted &&
+                        fallbackToExHandler &&
+                        OnExceptionAction != null &&
+                        !(t.Exception.InnerException is OperationCanceledException))
+                    {
+                        task
+                            .ContinueWith(async tt =>
+                            {
+                                await OnExceptionAction(context, t.Exception);
+                            })
+                            .ContinueWith(tt =>
+                            {
+                                callback?.Invoke(resultToReturn);
+                            });
+                    }
+                    else
+                    {
+                        callback?.Invoke(resultToReturn);
+                    }
+                });
+
+                return resultToReturn;
+            }
         }
 
         public void EndProcessRequest(IAsyncResult result)
