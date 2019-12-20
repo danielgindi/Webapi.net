@@ -52,7 +52,7 @@ namespace Webapi.net
             throw new NotSupportedException();
         }
 
-        public IAsyncResult BeginProcessRequest(HttpContext context, AsyncCallback cb, object extraData)
+        public virtual IAsyncResult BeginProcessRequest(HttpContext context, AsyncCallback cb, object extraData)
         {
             HttpRequest Request = context.Request;
             HttpResponse Response = context.Response;
