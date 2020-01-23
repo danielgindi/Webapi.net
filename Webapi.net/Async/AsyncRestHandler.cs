@@ -542,11 +542,13 @@ namespace Webapi.net
             {
                 while (aex.InnerExceptions.Count == 1)
                 {
-                    if (aex.InnerException is OperationCanceledException) return true;
-                    if (aex.InnerException is AggregateException)
-                    {
+                    if (aex.InnerException is OperationCanceledException)
+                        return true;
+
+                    else if (aex.InnerException is AggregateException)
                         aex = aex.InnerException as AggregateException;
-                    }
+
+                    else break;
                 }
             }
 
