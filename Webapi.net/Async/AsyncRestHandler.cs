@@ -135,9 +135,9 @@ namespace Webapi.net
                     {
                         task = route.TargetAction(context, path, pathParams);
                     }
-                    catch (Exception ex) when (!(ex is OperationCanceledException) && OnExceptionAction != null)
+                    catch (Exception ex) when (!IsExceptionOperationCancelled(ex) && OnExceptionAction != null)
                     {
-                        task = OnExceptionAction(context, ex);
+                        task = OnExceptionAction(context, GetFlattenedException(ex));
                         fallbackToExHandler = false;
                     }
 
@@ -152,9 +152,9 @@ namespace Webapi.net
                     {
                         task = route.ITarget.ProcessRequest(context, path, pathParams);
                     }
-                    catch (Exception ex) when (!(ex is OperationCanceledException) && OnExceptionAction != null)
+                    catch (Exception ex) when (!IsExceptionOperationCancelled(ex) && OnExceptionAction != null)
                     {
-                        task = OnExceptionAction(context, ex);
+                        task = OnExceptionAction(context, GetFlattenedException(ex));
                         fallbackToExHandler = false;
                     }
 
@@ -189,9 +189,9 @@ namespace Webapi.net
                 if (task.IsFaulted &&
                     fallbackToExHandler &&
                     OnExceptionAction != null &&
-                    !(task.Exception.InnerException is OperationCanceledException))
+                    !IsExceptionOperationCancelled(task.Exception))
                 {
-                    var exceptionTask = OnExceptionAction(context, task.Exception);
+                    var exceptionTask = OnExceptionAction(context, GetFlattenedException(task.Exception));
                     return BeginTask(exceptionTask, callback, state, context, false);
                 }
                 else
@@ -210,12 +210,12 @@ namespace Webapi.net
                     if (t.IsFaulted &&
                         fallbackToExHandler &&
                         OnExceptionAction != null &&
-                        !(t.Exception.InnerException is OperationCanceledException))
+                        !IsExceptionOperationCancelled(t.Exception))
                     {
                         task
                             .ContinueWith(async tt =>
                             {
-                                await OnExceptionAction(context, t.Exception);
+                                await OnExceptionAction(context, GetFlattenedException(t.Exception));
                             })
                             .ContinueWith(tt =>
                             {
@@ -528,6 +528,34 @@ namespace Webapi.net
         public void Patch(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"PATCH", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        #endregion
+
+        #region Utils
+
+        private static bool IsExceptionOperationCancelled(Exception ex)
+        {
+            if (ex is OperationCanceledException) return true;
+
+            if (ex is AggregateException aex)
+            {
+                while (aex.InnerExceptions.Count == 1)
+                {
+                    if (aex.InnerException is OperationCanceledException) return true;
+                    if (aex.InnerException is AggregateException)
+                    {
+                        aex = aex.InnerException as AggregateException;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static Exception GetFlattenedException(Exception ex)
+        {
+            return (ex is AggregateException aex) ? aex.Flatten() : ex;
         }
 
         #endregion
