@@ -7,6 +7,8 @@ using System.Text.RegularExpressions;
 using System.Net;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Linq;
+using System.Collections.Concurrent;
 
 namespace Webapi.net
 {
@@ -36,7 +38,7 @@ namespace Webapi.net
     /// </summary>
     public abstract class AsyncRestHandler : IHttpAsyncHandler
     {
-        public AsyncRestHandler(Dictionary<string, List<AsyncRestHandlerRoute>> routes)
+        public AsyncRestHandler(List<(string method, AsyncRestHandlerRoute route)> routes)
         {
             this.Routes = routes;
         }
@@ -95,8 +97,8 @@ namespace Webapi.net
             HttpContext context, string httpMethod, string path, ParamsCollection pathParams,
             AsyncCallback cb, object extraData)
         {
-            if (!this.Routes.TryGetValue(httpMethod, out var routes))
-                return null;
+            var routes = GetRoutesForMethod(httpMethod);
+            if (routes.Count == 0) return null;
 
             foreach (var route in routes)
             {
@@ -242,7 +244,8 @@ namespace Webapi.net
 
         #region Variables
 
-        private Dictionary<string, List<AsyncRestHandlerRoute>> _Routes = new Dictionary<string, List<AsyncRestHandlerRoute>>();
+        private List<(string method, AsyncRestHandlerRoute route)> _AllRoutes = new List<(string method, AsyncRestHandlerRoute route)>();
+        private ConcurrentDictionary<string, List<AsyncRestHandlerRoute>> _RoutesByMethodCache = new ConcurrentDictionary<string, List<AsyncRestHandlerRoute>>();
 
         private HttpStatusCode _DefaultStatusCode = HttpStatusCode.NotImplemented;
 
@@ -251,15 +254,15 @@ namespace Webapi.net
         #endregion
 
         #region Properties
-
+        
         public delegate Task ExceptionAction(HttpContext context, Exception ex);
 
         public ExceptionAction OnExceptionAction { get; set; }
 
-        public Dictionary<string, List<AsyncRestHandlerRoute>> Routes
+        public List<(string method, AsyncRestHandlerRoute route)> Routes
         {
-            get { return _Routes; }
-            set { _Routes = value; }
+            get { return _AllRoutes; }
+            set { _AllRoutes = value; }
         }
 
         public HttpStatusCode DefaultStatusCode
@@ -304,20 +307,35 @@ namespace Webapi.net
 
         #region AddRoute
 
-        public void AddRoute(string httpMethod, AsyncRestHandlerRoute Route)
+        private List<AsyncRestHandlerRoute> GetRoutesForMethod(string httpMethod)
         {
-            List<AsyncRestHandlerRoute> routes;
-            if (_Routes.ContainsKey(httpMethod.ToUpperInvariant()))
-            {
-                routes = _Routes[httpMethod.ToUpperInvariant()];
-            }
-            else
-            {
-                routes = new List<AsyncRestHandlerRoute>();
-                _Routes[httpMethod.ToUpperInvariant()] = routes;
-            }
+            var routesCache = this._RoutesByMethodCache;
 
-            routes.Add(Route);
+            if (routesCache.TryGetValue(httpMethod, out var routes))
+                return routes;
+
+            routes = _AllRoutes.Where(x => x.method == httpMethod || x.method == "").Select(x => x.route).ToList();
+
+            routesCache[httpMethod] = routes;
+
+            return routes;
+        }
+
+        private void ClearRoutesCache()
+        {
+            if (_RoutesByMethodCache.Count > 0)
+                _RoutesByMethodCache.Clear();
+        }
+
+        public void AddRoute(string httpMethod, AsyncRestHandlerRoute route)
+        {
+            httpMethod = (httpMethod ?? "").ToUpperInvariant();
+            if (httpMethod == "*")
+                httpMethod = "";
+
+            _AllRoutes.Add((method: httpMethod.ToUpperInvariant(), route: route));
+
+            ClearRoutesCache();
         }
 
         public void Get(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
