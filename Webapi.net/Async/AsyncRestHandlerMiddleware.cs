@@ -1,14 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
-using System.Web;
-using System.Collections;
 using System.Text.RegularExpressions;
-using System.Net;
 using System.Threading.Tasks;
-using System.Threading;
 using System.Linq;
 using System.Collections.Concurrent;
+using Microsoft.AspNetCore.Http;
+using System.Net;
 
 namespace Webapi.net
 {
@@ -36,37 +33,32 @@ namespace Webapi.net
     /// /file/:path(.*) => file/nested/folder/file.txt
     /// /docs/:section/:subsection? => docs/faq and docs/faq/installing
     /// </summary>
-    public abstract class AsyncRestHandler : IHttpAsyncHandler
+    public abstract class AsyncRestHandlerMiddleware
     {
-        public AsyncRestHandler(List<(string method, AsyncRestHandlerRoute route)> routes)
+        private readonly RequestDelegate _Next;
+
+        public AsyncRestHandlerMiddleware(RequestDelegate next)
+        {
+            _Next = next;
+        }
+
+        public AsyncRestHandlerMiddleware(List<(string method, AsyncRestHandlerRoute route)> routes)
         {
             this.Routes = routes;
         }
 
-        public AsyncRestHandler()
+        public AsyncRestHandlerMiddleware()
         {
         }
 
-        public bool IsReusable { get { return true; } }
-
-        public virtual void ProcessRequest(System.Web.HttpContext context)
+        public async Task Invoke(HttpContext context)
         {
-            throw new NotSupportedException();
-        }
+            HttpRequest request = context.Request;
+            HttpResponse response = context.Response;
 
-        public virtual IAsyncResult BeginProcessRequest(HttpContext context, AsyncCallback cb, object extraData)
-        {
-            HttpRequest Request = context.Request;
-            HttpResponse Response = context.Response;
+            //response.Headers[HeaderNames.ContentEncoding] = "utf8";
 
-            if (AutoDiscardDisconnectedClients && !Response.IsClientConnected)
-            {
-                return null;
-            }
-
-            Response.ContentEncoding = Encoding.UTF8;
-
-            string path = Request.Url.AbsolutePath;
+            string path = request.Path.Value;
             if (_PathPrefix != null && path.StartsWith(_PathPrefix))
             {
                 path = path.Remove(0, _PathPrefix.Length);
@@ -84,21 +76,18 @@ namespace Webapi.net
                 path = path.Remove(qIndex);
             }
 
-            var result = HandleRoute(context, Request.HttpMethod, path, null, cb, extraData);
-            if (result != null)
-                return result;
-
-            Response.StatusCode = (int)_DefaultStatusCode;
-            Response.End();
-            return null;
+            var result = await HandleRoute(context, request.Method, path, null).ConfigureAwait(false);
+            if (!result && _Next != null)
+            {
+                await _Next.Invoke(context).ConfigureAwait(false);
+                return;
+            }
         }
 
-        internal IAsyncResult HandleRoute(
-            HttpContext context, string httpMethod, string path, ParamsCollection pathParams,
-            AsyncCallback cb, object extraData)
+        internal async Task<bool> HandleRoute(HttpContext context, string httpMethod, string path, ParamsCollection pathParams)
         {
             var routes = GetRoutesForMethod(httpMethod);
-            if (routes.Count == 0) return null;
+            if (routes.Count == 0) return false;
 
             foreach (var route in routes)
             {
@@ -115,7 +104,7 @@ namespace Webapi.net
                         continue;
 
                     var key = route.PatternKeys[i - 1];
-                    var val = HttpUtility.UrlDecode(g.Value);
+                    var val = WebUtility.UrlDecode(g.Value);
 
                     if (key.Name != null)
                     {
@@ -130,37 +119,33 @@ namespace Webapi.net
 
                 if (route.TargetAction != null)
                 {
-                    Task task;
-                    bool fallbackToExHandler = true;
-
                     try
                     {
-                        task = route.TargetAction(context, path, pathParams);
+                        var task = route.TargetAction(context, path, pathParams);
+                        if (task != null)
+                            await task.ConfigureAwait(false);
                     }
                     catch (Exception ex) when (OnExceptionAction != null && !IsExceptionOperationCancelled(ex))
                     {
-                        task = OnExceptionAction(context, GetFlattenedException(ex));
-                        fallbackToExHandler = false;
+                        await OnExceptionAction(context, GetFlattenedException(ex)).ConfigureAwait(false);
                     }
 
-                    return BeginTask(task, cb, extraData, context, fallbackToExHandler);
+                    return true;
                 }
                 else if (route.ITarget != null)
                 {
-                    Task task;
-                    bool fallbackToExHandler = true;
-
                     try
                     {
-                        task = route.ITarget.ProcessRequest(context, path, pathParams);
+                        var task = route.ITarget.ProcessRequest(context, path, pathParams);
+                        if (task != null)
+                            await task.ConfigureAwait(false);
                     }
                     catch (Exception ex) when (OnExceptionAction != null && !IsExceptionOperationCancelled(ex))
                     {
-                        task = OnExceptionAction(context, GetFlattenedException(ex));
-                        fallbackToExHandler = false;
+                        await OnExceptionAction(context, GetFlattenedException(ex)).ConfigureAwait(false);
                     }
 
-                    return BeginTask(task, cb, extraData, context, fallbackToExHandler);
+                    return true;
                 }
                 else if (route.Handler != null)
                 {
@@ -168,70 +153,11 @@ namespace Webapi.net
                     if (!subPath.StartsWith("/"))
                         subPath = "/" + subPath;
 
-                    var result = route.Handler.HandleRoute(context, httpMethod, subPath, pathParams, cb, extraData);
-                    if (result != null)
-                        return result;
+                    return await route.Handler.HandleRoute(context, httpMethod, subPath, pathParams).ConfigureAwait(false);
                 }
             }
 
-            return null;
-        }
-
-        private static NoTaskAsyncResult s_NoTaskAsyncResult = new NoTaskAsyncResult();
-
-        private IAsyncResult BeginTask(Task task, AsyncCallback callback, object state, HttpContext context, bool fallbackToExHandler)
-        {
-            if (task == null)
-            {
-                return s_NoTaskAsyncResult;
-            }
-
-            if (task.IsCompleted)
-            {
-                if (task.IsFaulted &&
-                    fallbackToExHandler &&
-                    OnExceptionAction != null &&
-                    !IsExceptionOperationCancelled(task.Exception))
-                {
-                    var exceptionTask = OnExceptionAction(context, GetFlattenedException(task.Exception));
-                    return BeginTask(exceptionTask, callback, state, context, false);
-                }
-                else
-                {
-                    var resultToReturn = new TaskWrapperAsyncResult(task, state);
-                    resultToReturn.ForceCompletedSynchronously();
-                    callback?.Invoke(resultToReturn);
-                    return resultToReturn;
-                }
-            }
-            else
-            {
-                var resultToReturn = new TaskWrapperAsyncResult(task, state);
-
-                task.ContinueWith(t => {
-                    if (t.IsFaulted &&
-                        fallbackToExHandler &&
-                        OnExceptionAction != null &&
-                        !IsExceptionOperationCancelled(t.Exception))
-                    {
-                        task
-                            .ContinueWith(async tt =>
-                            {
-                                await OnExceptionAction(context, GetFlattenedException(t.Exception));
-                            })
-                            .ContinueWith(tt =>
-                            {
-                                callback?.Invoke(resultToReturn);
-                            });
-                    }
-                    else
-                    {
-                        callback?.Invoke(resultToReturn);
-                    }
-                });
-
-                return resultToReturn;
-            }
+            return false;
         }
 
         public void EndProcessRequest(IAsyncResult result)
@@ -247,8 +173,6 @@ namespace Webapi.net
         private List<(string method, AsyncRestHandlerRoute route)> _AllRoutes = new List<(string method, AsyncRestHandlerRoute route)>();
         private ConcurrentDictionary<string, List<AsyncRestHandlerRoute>> _RoutesByMethodCache = new ConcurrentDictionary<string, List<AsyncRestHandlerRoute>>();
 
-        private HttpStatusCode _DefaultStatusCode = HttpStatusCode.NotImplemented;
-
         private string _PathPrefix = null;
 
         #endregion
@@ -263,12 +187,6 @@ namespace Webapi.net
         {
             get { return _AllRoutes; }
             set { _AllRoutes = value; }
-        }
-
-        public HttpStatusCode DefaultStatusCode
-        {
-            get { return _DefaultStatusCode; }
-            set { _DefaultStatusCode = value; }
         }
 
         public string PathPrefix
@@ -358,12 +276,12 @@ namespace Webapi.net
             AddRoute(@"GET", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Get(string route, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Get(string route, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"GET", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
         }
 
-        public void Get(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Get(Regex routePattern, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"GET", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
@@ -388,12 +306,12 @@ namespace Webapi.net
             AddRoute(@"POST", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Post(string route, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Post(string route, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"POST", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
         }
 
-        public void Post(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Post(Regex routePattern, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"POST", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
@@ -418,12 +336,12 @@ namespace Webapi.net
             AddRoute(@"PUT", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Put(string route, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Put(string route, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"PUT", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
         }
 
-        public void Put(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Put(Regex routePattern, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"PUT", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
@@ -448,12 +366,12 @@ namespace Webapi.net
             AddRoute(@"DELETE", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Delete(string route, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Delete(string route, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"DELETE", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
         }
 
-        public void Delete(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Delete(Regex routePattern, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"DELETE", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
@@ -478,12 +396,12 @@ namespace Webapi.net
             AddRoute(@"HEAD", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Head(string route, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Head(string route, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"HEAD", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
         }
 
-        public void Head(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Head(Regex routePattern, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"HEAD", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
@@ -508,12 +426,12 @@ namespace Webapi.net
             AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Options(string route, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Options(string route, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
         }
 
-        public void Options(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Options(Regex routePattern, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"OPTIONS", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
@@ -538,12 +456,12 @@ namespace Webapi.net
             AddRoute(@"PATCH", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Patch(string route, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Patch(string route, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"PATCH", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
         }
 
-        public void Patch(Regex routePattern, AsyncRestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Patch(Regex routePattern, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"PATCH", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }

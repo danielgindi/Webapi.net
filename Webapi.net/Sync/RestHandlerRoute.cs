@@ -1,6 +1,10 @@
 ﻿using System.Collections.Generic;
 using System.Text.RegularExpressions;
+#if NETCORE
+using Microsoft.AspNetCore.Http;
+#elif NET472
 using System.Web;
+#endif
 
 namespace Webapi.net
 {
@@ -81,7 +85,11 @@ namespace Webapi.net
             this.Handler = null;
         }
 
+#if NETCORE
+        public RestHandlerRoute(string route, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
+#elif NET472
         public RestHandlerRoute(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+#endif
         {
             this.PatternKeys = new List<PathToRegexUtil.Token>();
             this.Pattern = PathToRegexUtil.PathToRegex(
@@ -94,7 +102,11 @@ namespace Webapi.net
             this.Handler = handler;
         }
 
+#if NETCORE
+        public RestHandlerRoute(Regex pattern, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
+#elif NET472
         public RestHandlerRoute(Regex pattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+#endif
         {
             this.PatternKeys = new List<PathToRegexUtil.Token>();
             this.Pattern = PathToRegexUtil.PathToRegex(
@@ -111,6 +123,10 @@ namespace Webapi.net
         public List<PathToRegexUtil.Token> PatternKeys;
         public Action TargetAction;
         public IRestHandlerSingleTarget ITarget;
+#if NETCORE
+        public RestHandlerMiddleware Handler;
+#elif NET472
         public RestHandler Handler;
+#endif
     }
 }

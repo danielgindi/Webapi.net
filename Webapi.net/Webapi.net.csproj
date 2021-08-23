@@ -1,18 +1,49 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProductVersion>8.0.30703</ProductVersion>
+    <ProductVersion>9.0.30729</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{692C8FC4-B880-468D-B460-A5114BE0011C}</ProjectGuid>
+    <ProjectGuid>{7467821A-C31C-46ED-8354-9705C28B28F3}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Webapi.net</RootNamespace>
     <AssemblyName>Webapi.net</AssemblyName>
-    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <TargetFrameworks>net472;netcoreapp3.1;net5.0</TargetFrameworks>
     <FileAlignment>512</FileAlignment>
-    <TargetFrameworkProfile />
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>StrongKey.snk</AssemblyOriginatorKeyFile>
+    <FileUpgradeFlags>
+    </FileUpgradeFlags>
+    <UpgradeBackupLocation>
+    </UpgradeBackupLocation>
+    <PublishUrl>publish\</PublishUrl>
+    <Install>true</Install>
+    <InstallFrom>Disk</InstallFrom>
+    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <UpdateInterval>7</UpdateInterval>
+    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+    <UpdatePeriodically>false</UpdatePeriodically>
+    <UpdateRequired>false</UpdateRequired>
+    <MapFileExtensions>true</MapFileExtensions>
+    <ApplicationRevision>0</ApplicationRevision>
+    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <BootstrapperEnabled>true</BootstrapperEnabled>
+    <Version>2.0.8.0</Version>
+    <Company />
+    <Product>Webapi.net</Product>
+    <Copyright>Copyright Daniel Cohen Gindi (danielgindi@gmail.com) © 2011</Copyright>
+    <PackageId>Webapi.net</PackageId>
+    <Authors>Daniel Cohen Gindi</Authors>
+    <RepositoryUrl>https://github.com/danielgindi/Webapi.net</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IsNetCore Condition="'$(TargetFramework)' == 'netcoreapp3.1' or '$(TargetFramework)' == 'net5.0'">true</IsNetCore>
+    <IsNetFramework Condition="'$(TargetFramework)' == 'net472'">true</IsNetFramework>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -23,7 +54,6 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
@@ -33,48 +63,51 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <NoWarn>
+    </NoWarn>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
-  <PropertyGroup>
-    <SignAssembly>true</SignAssembly>
+
+  <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp3.1'">
+    <DefineConstants>NETCORE31</DefineConstants>
+    <DefineConstants>NETCORE</DefineConstants>
   </PropertyGroup>
-  <PropertyGroup>
-    <AssemblyOriginatorKeyFile>StrongKey.snk</AssemblyOriginatorKeyFile>
+
+  <PropertyGroup Condition=" '$(TargetFramework)' == 'net5.0'">
+    <DefineConstants>NET50</DefineConstants>
+    <DefineConstants>NETCORE</DefineConstants>
   </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(TargetFramework)' == 'net472'">
+    <DefineConstants>NET472</DefineConstants>
+  </PropertyGroup>
+  
   <ItemGroup>
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System" />
-    <Reference Include="System.configuration" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Web" />
-    <Reference Include="System.Xml" />
+    <Compile Remove="Async\AsyncRestHandler.cs" Condition="'$(IsNetCore)'=='true'" />
+    <Compile Remove="Async\TaskWrapperAsyncResult.cs" Condition="'$(IsNetCore)'=='true'" />
+    <Compile Remove="Async\NoTaskAsyncResult.cs" Condition="'$(IsNetCore)'=='true'" />
+    <Compile Remove="Async\AsyncRestHandlerMiddleware.cs" Condition="'$(IsNetFramework)' == 'true'" />
+    <Compile Remove="Sync\RestHandler.cs" Condition="'$(IsNetCore)'=='true'" />
+    <Compile Remove="Sync\RestHandlerMiddleware.cs" Condition="'$(IsNetFramework)' == 'true'" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Async\AsyncRestHandler.cs" />
-    <Compile Include="Async\AsyncRestHandlerRoute.cs" />
-    <Compile Include="Async\IAsyncRestHandlerTarget.cs" />
-    <Compile Include="Async\NoTaskAsyncResult.cs" />
-    <Compile Include="Async\TaskWrapperAsyncResult.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Sync\IRestHandlerSingleTarget.cs" />
-    <Compile Include="Sync\RestHandler.cs" />
-    <Compile Include="Sync\RestHandlerRoute.cs" />
-    <Compile Include="Utils\PathToRegex.cs" />
-    <Compile Include="Utils\ParamsCollection.cs" />
+    <None Include="Async\AsyncRestHandler.cs" Condition="'$(IsNetCore)'=='true'" />
+    <None Include="Async\TaskWrapperAsyncResult.cs" Condition="'$(IsNetCore)'=='true'" />
+    <None Include="Async\NoTaskAsyncResult.cs" Condition="'$(IsNetCore)'=='true'" />
+    <None Include="Async\AsyncRestHandlerMiddleware.cs" Condition="'$(IsNetFramework)' == 'true'" />
+    <None Include="Sync\RestHandler.cs" Condition="'$(IsNetCore)'=='true'" />
+    <None Include="Sync\RestHandlerMiddleware.cs" Condition="'$(IsNetFramework)' == 'true'" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="StrongKey.snk" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" Condition="'$(IsNetCore)'=='true'" />
+    <PackageReference Include="Microsoft.Net.Http.Headers" Version="2.2.8" Condition="'$(IsNetCore)'=='true'" />
   </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <PropertyGroup>
-    <PreBuildEvent>
-    </PreBuildEvent>
-  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Web" Condition="'$(IsNetFramework)' == 'true'" />
+  </ItemGroup>
+
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

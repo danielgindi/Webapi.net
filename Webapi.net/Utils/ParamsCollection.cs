@@ -1,14 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Collections;
-using System.Text.RegularExpressions;
-using System.Web;
-using System.Threading.Tasks;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
-using System.Security.Permissions;
 
 namespace Webapi.net
 {
@@ -232,7 +227,7 @@ namespace Webapi.net
             }
         }
 
-        void System.Collections.ICollection.CopyTo(Array array, int index)
+        void ICollection.CopyTo(Array array, int index)
         {
             if (array == null)
             {
@@ -259,7 +254,7 @@ namespace Webapi.net
             }
         }
 
-        object System.Collections.ICollection.SyncRoot
+        object ICollection.SyncRoot
         {
             get
             {
@@ -271,7 +266,7 @@ namespace Webapi.net
             }
         }
 
-        bool System.Collections.ICollection.IsSynchronized
+        bool ICollection.IsSynchronized
         {
             get
             {
@@ -284,7 +279,6 @@ namespace Webapi.net
             return new ParamsCollectionEnumerator(this);
         }
 
-        [SecurityPermission(SecurityAction.LinkDemand, Flags = SecurityPermissionFlag.SerializationFormatter)]
         public virtual void GetObjectData(SerializationInfo info, StreamingContext context)
         {
             if (info == null)

@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using System.Linq;
+using System.Collections.Concurrent;
+using Microsoft.AspNetCore.Http;
 using System.Net;
 using System.Threading;
-using System.Web;
 
 namespace Webapi.net
 {
@@ -32,32 +34,32 @@ namespace Webapi.net
     /// /file/:path(.*) => file/nested/folder/file.txt
     /// /docs/:section/:subsection? => docs/faq and docs/faq/installing
     /// </summary>
-    public abstract class RestHandler : IHttpHandler
+    public abstract class RestHandlerMiddleware
     {
-        public RestHandler(Dictionary<string, List<RestHandlerRoute>> routes)
+        private readonly RequestDelegate _Next;
+
+        public RestHandlerMiddleware(RequestDelegate next)
+        {
+            _Next = next;
+        }
+
+        public RestHandlerMiddleware(Dictionary<string, List<RestHandlerRoute>> routes)
         {
             this.Routes = routes;
         }
 
-        public RestHandler()
+        public RestHandlerMiddleware()
         {
         }
 
-        public bool IsReusable { get { return true; } }
-
-        public virtual void ProcessRequest(System.Web.HttpContext context)
+        public async Task Invoke(HttpContext context)
         {
-            HttpRequest Request = context.Request;
-            HttpResponse Response = context.Response;
+            HttpRequest request = context.Request;
+            HttpResponse response = context.Response;
 
-            if (AutoDiscardDisconnectedClients && !Response.IsClientConnected)
-            {
-                return;
-            }
+            //response.Headers[HeaderNames.ContentEncoding] = "utf8";
 
-            Response.ContentEncoding = Encoding.UTF8;
-
-            string path = Request.Url.AbsolutePath;
+            string path = request.Path.Value;
             if (_PathPrefix != null && path.StartsWith(_PathPrefix))
             {
                 path = path.Remove(0, _PathPrefix.Length);
@@ -75,12 +77,12 @@ namespace Webapi.net
                 path = path.Remove(qIndex);
             }
 
-            var result = HandleRoute(context, Request.HttpMethod, path, null);
-            if (result)
+            var result = HandleRoute(context, request.Method, path, null);
+            if (!result && _Next != null)
+            {
+                await _Next.Invoke(context).ConfigureAwait(false);
                 return;
-
-            Response.StatusCode = (int)DefaultStatusCode;
-            Response.End();
+            }
         }
 
         internal bool HandleRoute(HttpContext context, string httpMethod, string path, ParamsCollection pathParams)
@@ -103,7 +105,7 @@ namespace Webapi.net
                         continue;
 
                     var key = route.PatternKeys[i - 1];
-                    var val = HttpUtility.UrlDecode(g.Value);
+                    var val = WebUtility.UrlDecode(g.Value);
 
                     if (key.Name != null)
                     {
@@ -174,8 +176,6 @@ namespace Webapi.net
 
         public Dictionary<string, List<RestHandlerRoute>> Routes { get; set; } = new Dictionary<string, List<RestHandlerRoute>>();
 
-        public HttpStatusCode DefaultStatusCode { get; set; } = HttpStatusCode.NotImplemented;
-
         public string PathPrefix
         {
             get { return _PathPrefix; }
@@ -199,14 +199,6 @@ namespace Webapi.net
             Sensitive = false,
             Strict = false,
         };
-
-        /// <summary>
-        /// Should disconnected clients be discarded automatically?
-        /// 
-        /// When a request is aborted, the chunks that were already sent might come in as a request.
-        /// And then files may be missing etc.
-        /// </summary>
-        public bool AutoDiscardDisconnectedClients { get; set; }
 
         #endregion
 
@@ -248,12 +240,12 @@ namespace Webapi.net
             AddRoute(@"GET", new RestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Get(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Get(string route, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"GET", new RestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
         }
 
-        public void Get(Regex routePattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Get(Regex routePattern, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"GET", new RestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
@@ -278,12 +270,12 @@ namespace Webapi.net
             AddRoute(@"POST", new RestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Post(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Post(string route, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"POST", new RestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
         }
 
-        public void Post(Regex routePattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Post(Regex routePattern, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"POST", new RestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
@@ -308,12 +300,12 @@ namespace Webapi.net
             AddRoute(@"PUT", new RestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Put(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Put(string route, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"PUT", new RestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
         }
 
-        public void Put(Regex routePattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Put(Regex routePattern, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"PUT", new RestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
@@ -338,12 +330,12 @@ namespace Webapi.net
             AddRoute(@"DELETE", new RestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Delete(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Delete(string route, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"DELETE", new RestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
         }
 
-        public void Delete(Regex routePattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Delete(Regex routePattern, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"DELETE", new RestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
@@ -368,12 +360,12 @@ namespace Webapi.net
             AddRoute(@"HEAD", new RestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Head(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Head(string route, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"HEAD", new RestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
         }
 
-        public void Head(Regex routePattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Head(Regex routePattern, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"HEAD", new RestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
@@ -398,12 +390,12 @@ namespace Webapi.net
             AddRoute(@"OPTIONS", new RestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Options(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Options(string route, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"OPTIONS", new RestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
         }
 
-        public void Options(Regex routePattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Options(Regex routePattern, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"OPTIONS", new RestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
@@ -428,12 +420,12 @@ namespace Webapi.net
             AddRoute(@"PATCH", new RestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
         }
 
-        public void Patch(string route, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Patch(string route, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"PATCH", new RestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
         }
 
-        public void Patch(Regex routePattern, RestHandler handler, PathToRegexUtil.PathToRegexOptions options = null)
+        public void Patch(Regex routePattern, RestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"PATCH", new RestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
