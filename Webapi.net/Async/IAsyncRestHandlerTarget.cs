@@ -1,5 +1,5 @@
 ﻿using System.Threading.Tasks;
-#if NETCORE
+#if NETCORE || NETSTANDARD
 using Microsoft.AspNetCore.Http;
 #elif NET472
 using System.Web;

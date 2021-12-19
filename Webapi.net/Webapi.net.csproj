@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Webapi.net</RootNamespace>
     <AssemblyName>Webapi.net</AssemblyName>
-    <TargetFrameworks>net472;netcoreapp3.1;net5.0</TargetFrameworks>
+    <TargetFrameworks>net472;netstandard2.0;netcoreapp3.1;net5.0</TargetFrameworks>
     <FileAlignment>512</FileAlignment>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>StrongKey.snk</AssemblyOriginatorKeyFile>
@@ -42,7 +42,7 @@
     <RepositoryUrl>https://github.com/danielgindi/Webapi.net</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <IsNetCore Condition="'$(TargetFramework)' == 'netcoreapp3.1' or '$(TargetFramework)' == 'net5.0'">true</IsNetCore>
+    <IsNetStandard Condition="'$(TargetFramework)' == 'netstandard2.0' or '$(TargetFramework)' == 'netcoreapp3.1' or '$(TargetFramework)' == 'net5.0'">true</IsNetStandard>
     <IsNetFramework Condition="'$(TargetFramework)' == 'net472'">true</IsNetFramework>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -80,39 +80,36 @@
     <DefineConstants>NETCORE</DefineConstants>
   </PropertyGroup>
 
+  <PropertyGroup Condition=" '$(TargetFramework)' == 'netstandard2.0'">
+    <DefineConstants>NETSTANDARD20</DefineConstants>
+    <DefineConstants>NETSTANDARD</DefineConstants>
+  </PropertyGroup>
+
   <PropertyGroup Condition=" '$(TargetFramework)' == 'net472'">
     <DefineConstants>NET472</DefineConstants>
   </PropertyGroup>
   
   <ItemGroup>
-    <Compile Remove="Async\AsyncRestHandler.cs" Condition="'$(IsNetCore)'=='true'" />
-    <Compile Remove="Async\TaskWrapperAsyncResult.cs" Condition="'$(IsNetCore)'=='true'" />
-    <Compile Remove="Async\NoTaskAsyncResult.cs" Condition="'$(IsNetCore)'=='true'" />
+    <Compile Remove="Async\AsyncRestHandler.cs" Condition="'$(IsNetStandard)'=='true'" />
+    <Compile Remove="Async\TaskWrapperAsyncResult.cs" Condition="'$(IsNetStandard)'=='true'" />
+    <Compile Remove="Async\NoTaskAsyncResult.cs" Condition="'$(IsNetStandard)'=='true'" />
     <Compile Remove="Async\AsyncRestHandlerMiddleware.cs" Condition="'$(IsNetFramework)' == 'true'" />
-    <Compile Remove="Sync\RestHandler.cs" Condition="'$(IsNetCore)'=='true'" />
+    <Compile Remove="Sync\RestHandler.cs" Condition="'$(IsNetStandard)'=='true'" />
     <Compile Remove="Sync\RestHandlerMiddleware.cs" Condition="'$(IsNetFramework)' == 'true'" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Async\AsyncRestHandler.cs" Condition="'$(IsNetCore)'=='true'" />
-    <None Include="Async\TaskWrapperAsyncResult.cs" Condition="'$(IsNetCore)'=='true'" />
-    <None Include="Async\NoTaskAsyncResult.cs" Condition="'$(IsNetCore)'=='true'" />
+    <None Include="Async\AsyncRestHandler.cs" Condition="'$(IsNetStandard)'=='true'" />
+    <None Include="Async\TaskWrapperAsyncResult.cs" Condition="'$(IsNetStandard)'=='true'" />
+    <None Include="Async\NoTaskAsyncResult.cs" Condition="'$(IsNetStandard)'=='true'" />
     <None Include="Async\AsyncRestHandlerMiddleware.cs" Condition="'$(IsNetFramework)' == 'true'" />
-    <None Include="Sync\RestHandler.cs" Condition="'$(IsNetCore)'=='true'" />
+    <None Include="Sync\RestHandler.cs" Condition="'$(IsNetStandard)'=='true'" />
     <None Include="Sync\RestHandlerMiddleware.cs" Condition="'$(IsNetFramework)' == 'true'" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" Condition="'$(IsNetCore)'=='true'" />
-    <PackageReference Include="Microsoft.Net.Http.Headers" Version="2.2.8" Condition="'$(IsNetCore)'=='true'" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" Condition="'$(IsNetStandard)'=='true'" />
+    <PackageReference Include="Microsoft.Net.Http.Headers" Version="2.2.8" Condition="'$(IsNetStandard)'=='true'" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System.Web" Condition="'$(IsNetFramework)' == 'true'" />
   </ItemGroup>
-
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
-  </Target>
-  <Target Name="AfterBuild">
-  </Target>
-  -->
 </Project>
