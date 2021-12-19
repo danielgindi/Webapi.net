@@ -51,7 +51,7 @@ namespace Webapi.net
         {
         }
 
-        public async Task Invoke(HttpContext context)
+        public virtual async Task Invoke(HttpContext context)
         {
             HttpRequest request = context.Request;
             HttpResponse response = context.Response;
