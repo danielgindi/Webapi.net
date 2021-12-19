@@ -160,14 +160,6 @@ namespace Webapi.net
             return false;
         }
 
-        public void EndProcessRequest(IAsyncResult result)
-        {
-            if (result is Task)
-            {
-                ((Task)result).GetAwaiter().GetResult();
-            }
-        }
-
         #region Variables
 
         private List<(string method, AsyncRestHandlerRoute route)> _AllRoutes = new List<(string method, AsyncRestHandlerRoute route)>();
