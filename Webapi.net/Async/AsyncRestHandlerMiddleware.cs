@@ -71,8 +71,6 @@ namespace Webapi.net
                 path = path.Remove(0, _PathPrefix.Length);
             }
 
-            path = path.Remove(0, _PathPrefix.Length);
-
             if (path.Length > 0 && path[0] != '/')
             {
                 path = "/" + path;
