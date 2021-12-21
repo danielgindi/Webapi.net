@@ -60,8 +60,15 @@ namespace Webapi.net
             //response.Headers[HeaderNames.ContentEncoding] = "utf8";
 
             string path = request.Path.Value;
-            if (_PathPrefix != null && path.StartsWith(_PathPrefix))
+
+            if (_PathPrefix != null)
             {
+                if (!path.StartsWith(_PathPrefix))
+                {
+                    await _Next.Invoke(context).ConfigureAwait(false);
+                    return;
+                }
+
                 path = path.Remove(0, _PathPrefix.Length);
             }
 

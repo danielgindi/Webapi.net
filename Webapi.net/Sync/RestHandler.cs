@@ -58,8 +58,16 @@ namespace Webapi.net
             Response.ContentEncoding = Encoding.UTF8;
 
             string path = Request.Url.AbsolutePath;
-            if (_PathPrefix != null && path.StartsWith(_PathPrefix))
+
+            if (_PathPrefix != null)
             {
+                if (!path.StartsWith(_PathPrefix))
+                {
+                    Response.StatusCode = (int)DefaultStatusCode;
+                    Response.End();
+                    return;
+                }
+
                 path = path.Remove(0, _PathPrefix.Length);
             }
 

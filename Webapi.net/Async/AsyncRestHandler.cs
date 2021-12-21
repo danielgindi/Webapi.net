@@ -65,8 +65,16 @@ namespace Webapi.net
             Response.ContentEncoding = Encoding.UTF8;
 
             string path = Request.Url.AbsolutePath;
-            if (_PathPrefix != null && path.StartsWith(_PathPrefix))
+
+            if (_PathPrefix != null)
             {
+                if (!path.StartsWith(_PathPrefix))
+                {
+                    Response.StatusCode = (int)DefaultStatusCode;
+                    Response.End();
+                    return null;
+                }
+
                 path = path.Remove(0, _PathPrefix.Length);
             }
 
@@ -86,7 +94,7 @@ namespace Webapi.net
             if (result != null)
                 return result;
 
-            Response.StatusCode = (int)_DefaultStatusCode;
+            Response.StatusCode = (int)DefaultStatusCode;
             Response.End();
             return null;
         }
@@ -245,8 +253,6 @@ namespace Webapi.net
         private List<(string method, AsyncRestHandlerRoute route)> _AllRoutes = new List<(string method, AsyncRestHandlerRoute route)>();
         private ConcurrentDictionary<string, List<AsyncRestHandlerRoute>> _RoutesByMethodCache = new ConcurrentDictionary<string, List<AsyncRestHandlerRoute>>();
 
-        private HttpStatusCode _DefaultStatusCode = HttpStatusCode.NotImplemented;
-
         private string _PathPrefix = null;
 
         #endregion
@@ -263,11 +269,7 @@ namespace Webapi.net
             set { _AllRoutes = value; }
         }
 
-        public HttpStatusCode DefaultStatusCode
-        {
-            get { return _DefaultStatusCode; }
-            set { _DefaultStatusCode = value; }
-        }
+        public HttpStatusCode DefaultStatusCode { get; set; } = HttpStatusCode.NotImplemented;
 
         public string PathPrefix
         {
