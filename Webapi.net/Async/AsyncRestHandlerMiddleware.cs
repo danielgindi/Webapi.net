@@ -56,6 +56,11 @@ namespace Webapi.net
             HttpRequest request = context.Request;
             HttpResponse response = context.Response;
 
+            if (AutoDiscardDisconnectedClients && context.RequestAborted.IsCancellationRequested)
+            {
+                return;
+            }
+
             //response.Headers[HeaderNames.ContentEncoding] = "utf8";
 
             string path = request.Path.Value;
