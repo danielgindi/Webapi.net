@@ -132,9 +132,9 @@ namespace Webapi.net
                         if (task != null)
                             await task.ConfigureAwait(false);
                     }
-                    catch (Exception ex) when (OnExceptionAction != null && !IsExceptionOperationCancelled(ex))
+                    catch (Exception ex) when (CatchOperationCanceledExceptions || !ExceptionHelper.IsExceptionOperationCanceled(ex))
                     {
-                        await OnExceptionAction(context, GetFlattenedException(ex)).ConfigureAwait(false);
+                        await OnException(context, ExceptionHelper.GetFlattenedException(ex)).ConfigureAwait(false);
                     }
 
                     return true;
@@ -147,9 +147,9 @@ namespace Webapi.net
                         if (task != null)
                             await task.ConfigureAwait(false);
                     }
-                    catch (Exception ex) when (OnExceptionAction != null && !IsExceptionOperationCancelled(ex))
+                    catch (Exception ex) when (CatchOperationCanceledExceptions || !ExceptionHelper.IsExceptionOperationCanceled(ex))
                     {
-                        await OnExceptionAction(context, GetFlattenedException(ex)).ConfigureAwait(false);
+                        await OnException(context, ExceptionHelper.GetFlattenedException(ex)).ConfigureAwait(false);
                     }
 
                     return true;
@@ -167,6 +167,19 @@ namespace Webapi.net
             return false;
         }
 
+        public virtual Task OnException(HttpContext context, Exception ex)
+        {
+#pragma warning disable CS0612 // Type or member is obsolete
+            if (OnExceptionAction != null)
+            {
+                return OnExceptionAction.Invoke(context, ex);
+            }
+#pragma warning restore CS0612 // Type or member is obsolete
+
+            // Do not swallow the errors. Override this method to handle the exception.
+            return Task.FromException(ex);
+        }
+
         #region Variables
 
         private List<(string method, AsyncRestHandlerRoute route)> _AllRoutes = new List<(string method, AsyncRestHandlerRoute route)>();
@@ -177,10 +190,14 @@ namespace Webapi.net
         #endregion
 
         #region Properties
-        
+
+        [Obsolete]
         public delegate Task ExceptionAction(HttpContext context, Exception ex);
 
+        [Obsolete]
         public ExceptionAction OnExceptionAction { get; set; }
+
+        public bool CatchOperationCanceledExceptions = true;
 
         public List<(string method, AsyncRestHandlerRoute route)> Routes
         {
@@ -463,36 +480,6 @@ namespace Webapi.net
         public void Patch(Regex routePattern, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"PATCH", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
-        }
-
-        #endregion
-
-        #region Utils
-
-        private static bool IsExceptionOperationCancelled(Exception ex)
-        {
-            if (ex is OperationCanceledException) return true;
-
-            if (ex is AggregateException aex)
-            {
-                while (aex.InnerExceptions.Count == 1)
-                {
-                    if (aex.InnerException is OperationCanceledException)
-                        return true;
-
-                    else if (aex.InnerException is AggregateException)
-                        aex = aex.InnerException as AggregateException;
-
-                    else break;
-                }
-            }
-
-            return false;
-        }
-
-        private static Exception GetFlattenedException(Exception ex)
-        {
-            return (ex is AggregateException aex) ? aex.Flatten() : ex;
         }
 
         #endregion
