@@ -165,7 +165,14 @@ namespace Webapi.net
                     if (!subPath.StartsWith("/"))
                         subPath = "/" + subPath;
 
-                    return await route.Handler.HandleRoute(context, httpMethod, subPath, pathParams).ConfigureAwait(false);
+                    try
+                    {
+                        return await route.Handler.HandleRoute(context, httpMethod, subPath, pathParams).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (CatchOperationCanceledExceptions || !ExceptionHelper.IsExceptionOperationCanceled(ex))
+                    {
+                        await OnException(context, ExceptionHelper.GetFlattenedException(ex)).ConfigureAwait(false);
+                    }
                 }
             }
 
