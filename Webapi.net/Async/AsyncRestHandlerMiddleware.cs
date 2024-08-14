@@ -172,6 +172,7 @@ namespace Webapi.net
                     catch (Exception ex) when (CatchOperationCanceledExceptions || !ExceptionHelper.IsExceptionOperationCanceled(ex))
                     {
                         await OnException(context, ExceptionHelper.GetFlattenedException(ex)).ConfigureAwait(false);
+                        return true; // We consumed this route, do not call the next middleware
                     }
                 }
             }
