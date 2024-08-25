@@ -495,6 +495,36 @@ namespace Webapi.net
             AddRoute(@"PATCH", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
         }
 
+        public void Connect(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"CONNECT", new AsyncRestHandlerRoute(route, action, options ?? DefaultRouteOptions));
+        }
+
+        public void Connect(Regex routePattern, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"CONNECT", new AsyncRestHandlerRoute(routePattern, action, options ?? DefaultRouteOptions));
+        }
+
+        public void Connect(string route, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"CONNECT", new AsyncRestHandlerRoute(route, target, options ?? DefaultRouteOptions));
+        }
+
+        public void Connect(Regex routePattern, IAsyncRestHandlerTarget target, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"CONNECT", new AsyncRestHandlerRoute(routePattern, target, options ?? DefaultRouteOptions));
+        }
+
+        public void Connect(string route, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"CONNECT", new AsyncRestHandlerRoute(route, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
+        public void Connect(Regex routePattern, AsyncRestHandlerMiddleware handler, PathToRegexUtil.PathToRegexOptions options = null)
+        {
+            AddRoute(@"CONNECT", new AsyncRestHandlerRoute(routePattern, handler, options ?? DefaultHandlerRouteOptions));
+        }
+
         public void AnyMethod(string route, AsyncRestHandlerRoute.Action action, PathToRegexUtil.PathToRegexOptions options = null)
         {
             AddRoute(@"", new AsyncRestHandlerRoute(route, action, options ?? DefaultRouteOptions));
