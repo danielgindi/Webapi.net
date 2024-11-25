@@ -38,6 +38,12 @@ namespace Webapi.net
     {
         private readonly RequestDelegate _Next;
 
+        /// <summary>
+        /// Relevant in nested middlewares only.
+        /// If `false`, the parent middleware behave as if no route was found when this middleware has no matches.
+        /// </summary>
+        public bool FallbackToNextRouteInParent = true;
+
         public RestHandlerMiddleware(RequestDelegate next)
         {
             _Next = next;
@@ -143,8 +149,11 @@ namespace Webapi.net
                         if (!subPath.StartsWith("/"))
                             subPath = "/" + subPath;
 
-                        if (route.Handler.HandleRoute(context, httpMethod, subPath, pathParams))
-                            return true;
+                        var result = route.Handler.HandleRoute(context, httpMethod, subPath, pathParams);
+                        if (result && route.Handler.FallbackToNextRouteInParent)
+                            continue;
+
+                        return result;
                     }
                 }
                 catch (ThreadAbortException)

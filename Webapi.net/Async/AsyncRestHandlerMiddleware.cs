@@ -37,6 +37,12 @@ namespace Webapi.net
     {
         private readonly RequestDelegate _Next;
 
+        /// <summary>
+        /// Relevant in nested middlewares only.
+        /// If `false`, the parent middleware behave as if no route was found when this middleware has no matches.
+        /// </summary>
+        public bool FallbackToNextRouteInParent = true;
+
         public AsyncRestHandlerMiddleware(RequestDelegate next)
         {
             _Next = next;
@@ -167,7 +173,11 @@ namespace Webapi.net
 
                     try
                     {
-                        return await route.Handler.HandleRoute(context, httpMethod, subPath, pathParams).ConfigureAwait(false);
+                        var result = await route.Handler.HandleRoute(context, httpMethod, subPath, pathParams).ConfigureAwait(false);
+                        if (result && route.Handler.FallbackToNextRouteInParent)
+                            continue;
+
+                        return result;
                     }
                     catch (Exception ex) when (CatchOperationCanceledExceptions || !ExceptionHelper.IsExceptionOperationCanceled(ex))
                     {
