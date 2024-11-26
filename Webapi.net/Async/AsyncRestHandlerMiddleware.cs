@@ -174,7 +174,7 @@ namespace Webapi.net
                     try
                     {
                         var result = await route.Handler.HandleRoute(context, httpMethod, subPath, pathParams).ConfigureAwait(false);
-                        if (result && route.Handler.FallbackToNextRouteInParent)
+                        if (!result && route.Handler.FallbackToNextRouteInParent)
                             continue;
 
                         return result;

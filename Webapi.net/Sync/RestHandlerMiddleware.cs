@@ -150,7 +150,7 @@ namespace Webapi.net
                             subPath = "/" + subPath;
 
                         var result = route.Handler.HandleRoute(context, httpMethod, subPath, pathParams);
-                        if (result && route.Handler.FallbackToNextRouteInParent)
+                        if (!result && route.Handler.FallbackToNextRouteInParent)
                             continue;
 
                         return result;
